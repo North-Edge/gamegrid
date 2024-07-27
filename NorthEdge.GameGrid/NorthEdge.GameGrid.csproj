@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>NorthEdge.GameGrid</AssemblyName>
+        <RootNamespace>NorthEdge.GameGrid</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\NorthEdge.Utilities\NorthEdge.Utilities.csproj" />
+    </ItemGroup>
+
+</Project>
