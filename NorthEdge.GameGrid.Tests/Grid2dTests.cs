@@ -197,7 +197,7 @@ public class Grid2dTests<T>
         var grid = new Grid2d<T>(5, 5);
         var iteration = 0;
         var index = 0;
-        // the values to an increasing value  
+        // set the values to an increasing value  
         grid.Traverse((i, j, _) => grid[i,j] = functor.Value(++index));
         // check the values using the iterator for the grid
         Assert.Multiple(() => {
@@ -215,12 +215,12 @@ public class Grid2dTests<T>
         grid.Traverse((i, j, _) => grid[i,j] = functor.Random(-Bound, Bound));
         // iterate as a dictionary of elements keyed by (row,column) structures
         Assert.Multiple(() => {
-            foreach (var keyPair in grid.ToDictionary())
+            foreach (var keyValue in grid.ToDictionary())
             {
                 // each value of the dictionary should match the value in the grid at the coordinates in the key
-                Assert.That(keyPair.Value, Is.EqualTo(grid[keyPair.Key.i, keyPair.Key.j]));
+                Assert.That(keyValue.Value, Is.EqualTo(grid[keyValue.Key.i, keyValue.Key.j]));
                 // all the values should have been clamped because the clamping function was set
-                Assert.That(functor.AboveMin(keyPair.Value) && functor.BelowMax(keyPair.Value));
+                Assert.That(functor.AboveMin(keyValue.Value) && functor.BelowMax(keyValue.Value));
             }
         });
         var value = functor.Value(OutOfBoundDefault);
@@ -235,27 +235,31 @@ public class Grid2dTests<T>
             Assert.That(grid.SetClamp(functor.Clamp, true).SelectMany(i => i).All(i => functor.AboveMin(i) && functor.BelowMax(i)));
         });
     }
-    
+
     /// <summary>
-    /// Test transforming the grind into a dictionary containing a list
-    /// of the coordinates of elements keyed by their corresponding value
+    /// Tests the comparison operators of the <see cref="Grid2d{T}"/>
     /// </summary>
     /// <param name="functor">the datapoint for the current theory</param>
     [Theory]
-    public void TestCoordinatesDictionary(TestFunctors<T> functor)
+    public void TestComparisons(TestFunctors<T> functor)
     {
-        var grid = new Grid2d<T>(5, 5);
-        // set all the value of the elements to the value of their column index
-        grid.Traverse((i, j, _) => grid[i, j] = functor.Value(j));
-        // transform the grid into a dictionary of coordinates for each value
-        var coordinates = grid.ToCoordinates();
-        // iterate the coordinates dictionary
-        Assert.Multiple(() => {
-            foreach (var keyPair in coordinates)
-            {
-                // all the values should be equal to their column index
-                Assert.That(keyPair.Value.All(k => keyPair.Key!.Equals(functor.Value(k.j))));         
-            }
+        var grid1 = new Grid2d<T>(5, 5);
+        var grid2 = new Grid2d<T>(5, 5);
+        var grid3 = new Grid2d<T>(3, 3);
+        var index = 0;
+        
+        // the grids should be equal
+        Assert.Multiple(() =>
+        {
+            Assert.That(grid1.Equals(grid1), Is.True);
+            Assert.That(grid1 == grid2, Is.True);
+            // set the values to an increasing value  
+            grid1.Traverse((i, j, _) => grid1[i,j] = functor.Value(++index));
+            // the grids shouldn't be equal anymore
+            Assert.That(grid1 != grid2, Is.True);
+            Assert.That(grid3.Equals(null), Is.False);
+            Assert.That(grid3, Is.Not.EqualTo(grid2));
+            Assert.That(grid2.Resize(3, 3), Is.EqualTo(grid3));
         });
     }
 }

@@ -150,12 +150,34 @@ public class Grid2dCommonTests
     /// as a dictionary containing a list of the coordinates of elements keyed by their corresponding value 
     /// </summary>
     [Test]
-    public void TestCoordinatesDictionary()
+    public void TestCoordinatesDictionaryWithInvalidType()
     {
         // the method should throw an exception because a nullable type cannot be used as a dictionary key
         Assert.Throws<InvalidOperationException>(() => _ = new Grid2d<int?>(1, 1).ToCoordinates());
     }
-    
+        
+    /// <summary>
+    /// Test transforming the grind into a dictionary containing a list
+    /// of the coordinates of elements keyed by their corresponding value
+    /// </summary>
+    [Test]
+    public void TestCoordinatesDictionary()
+    {
+        var grid = new Grid2d<TestValue>(5, 5);
+        // set all the value of the elements to the value of their column index
+        grid.Traverse((i, j, _) => grid[i, j] = new TestValue((ValuesEnum)j));
+        // transform the grid into a dictionary of coordinates for each value
+        var coordinates = grid.ToCoordinates();
+        // iterate the coordinates dictionary
+        Assert.Multiple(() => {
+            foreach (var keyValue in coordinates)
+            {
+                // all the values should be equal to their column index
+                Assert.That(keyValue.Value.All(k => keyValue.Key.Value == (ValuesEnum)k.j));
+            }
+        });
+    }
+
     /// <summary>
     /// Tests the cast to string using an action to transform the value of the elements
     /// </summary>
@@ -170,5 +192,144 @@ public class Grid2dCommonTests
         };
         // the resulting string should match the expected output
         Assert.That(grid.ToString(i => (ValuesEnum)i), Is.EqualTo(expected));
+    }
+
+    /// <summary>
+    /// Tests the check that verifies coordinates are within the bounds of the grid 
+    /// </summary>
+    [Test]
+    public void TestCoordinatesWithinBound()
+    {
+        var grid = new Grid2d<int>(5, 5);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(grid.WithinBound(0, 0), Is.True);
+            Assert.That(grid.WithinBound(5, 5), Is.False);
+        });
+    }
+
+    /// <summary>
+    /// Tests the hash code method for the grid
+    /// </summary>
+    [Test]
+    public void TestHashCode()
+    {
+        var random = new Random(Guid.NewGuid().GetHashCode());
+        var grids = new List<Grid2d<int>>();
+        var gridCount = 100;
+
+        for (var n = 0; n < gridCount; ++n)
+        {
+            var rows = random.Next(1, 25);
+            var columns = random.Next(1, 25);
+            var grid = new Grid2d<int>(rows, columns);
+            // set the values to random values
+            grids.Add(grid.Traverse((i, j, _) => grid[i,j] = random.Next(-9999999, 9999999)));
+        }
+
+        Assert.That(grids.ToHashSet(), Has.Count.EqualTo(gridCount));
+    }
+    
+    /// <summary>
+    /// Test retrieving sub-grids from a grid 
+    /// </summary>
+    [Test]
+    public void TestSubGrid()
+    {
+        var grid = new Grid2d<int>(5, 5);
+        var index = 0;
+        // set the values to an increasing value  
+        grid.Traverse((i, j, _) => grid[i,j] = ++index);
+        
+        Assert.Multiple(() =>
+        {
+            var subgrid = grid.SubGrid(0, 0, 3, 3);
+
+            Assert.That(subgrid.Rows, Is.EqualTo(3));
+            Assert.That(subgrid.Columns, Is.EqualTo(3));
+            Assert.That(grid.Resize(3, 3), Is.EqualTo(subgrid));
+
+            // check that asking for a subgrid than is available doesn't exceed the bounds of the grid
+            subgrid = grid.SubGrid(2, 2, 3, 3);
+            Assert.That(subgrid.Rows, Is.EqualTo(1));
+            Assert.That(subgrid.Columns, Is.EqualTo(1));
+            // check that trying to retrieve a subgrid out of bounds throws an exception
+            Assert.Throws<ArgumentOutOfRangeException>(() => _ = grid.SubGrid(4, 4, 1, 1));
+            // check that trying to retrieve a subgrid of invalid dimensions
+            Assert.Throws<ArgumentOutOfRangeException>(() => _ = grid.SubGrid(0, 0, 0, 0));
+        });
+    }
+
+    /// <summary>
+    /// Tests the neighbours methods
+    /// </summary>
+    [Test]
+    public void TestNeighbours()
+    {
+        var index = 0;
+        var grid1 = new Grid2d<int>(5, 5);
+        var grid2 = new Grid2d<int>(3, 3);
+        var grid3 = new Grid2d<int>(2, 2);
+
+        // set the values to an increasing value
+        grid1.Traverse((i, j, _) => grid1[i,j] = ++index);
+
+        IList<(int i, int j)> indexes = [
+            (-1,  0), ( 1,  0),
+            ( 0, -1), ( 0,  1)
+        ];
+        var subgrid1 = grid1.SubGrid(0, 0, 3, 3);
+        var subgrid2 = grid1.SubGrid(0, 0, 2, 2);
+        var neighbours1 = grid1.NeighboursAt(1, 1);
+        var neighbours2 = grid1.NeighboursAt(0, 0);
+        var neighbours3 = grid1.NeighboursAt(1, 1, null, indexes);
+        var neighbours4 = grid1.NeighboursAt(1, 1, (_, neighbour) => neighbour <= 2);
+        var neighbours5 = grid1.NeighboursAt(1, 1, (_, neighbour) => neighbour <= 2, indexes);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(neighbours1, Has.Count.EqualTo(8));             // all 8 elements around the target
+            Assert.That(neighbours2, Has.Count.EqualTo(3));             // 3 elements because the target is in a corner
+            Assert.That(neighbours3, Has.Count.EqualTo(indexes.Count)); // 4 elements matching the indexes
+            Assert.That(neighbours4, Has.Count.EqualTo(2));             // 2 elements filtered by the predicate
+            Assert.That(neighbours5, Has.Count.EqualTo(1));             // 1 element filtered by the predicate and indexes
+            // the only result is the second element of the grid
+            Assert.That(neighbours5.First().Key.i, Is.EqualTo(0));
+            Assert.That(neighbours5.First().Key.j, Is.EqualTo(1));
+            // check that the neighbours match the values in the grid at each of their coordinates
+            CheckNeighbours(neighbours1, grid1);
+            CheckNeighbours(neighbours2, grid1);
+            CheckNeighbours(neighbours3, grid1);
+            CheckNeighbours(neighbours4, grid1);
+            CheckNeighbours(neighbours5, grid1);
+            // the neighbours do not contain the target element so the grids shouldn't be equal
+            Assert.That(grid2.Apply(neighbours1, out var modified1), Is.Not.EqualTo(subgrid1));
+            Assert.That(modified1, Is.EqualTo(8));
+            // now, set the value of the target element in the second grid 
+            grid2[1, 1] = subgrid1[1, 1];
+            // the grids should now be equal
+            Assert.That(grid2, Is.EqualTo(subgrid1));
+            // the neighbours do not contain the target element so the grids shouldn't be equal
+            Assert.That(grid3.Apply(neighbours2, out var modified2), Is.Not.EqualTo(subgrid2));
+            Assert.That(modified2, Is.EqualTo(3));
+            // now, set the value of the target element in the second grid 
+            grid3[0, 0] = subgrid2[0, 0];
+            // the grids should now be equal
+            Assert.That(grid3, Is.EqualTo(subgrid2));
+        });
+    }
+
+    /// <summary>
+    /// Verifies that a dictionary of neighbours match the values at their coordinates in the grid
+    /// </summary>
+    /// <param name="neighbours">the neighbours to check</param>
+    /// <param name="grid">the grid to check against</param>
+    private static void CheckNeighbours(IDictionary<(int i, int j), int> neighbours, Grid2d<int> grid)
+    {
+        foreach (var coords in neighbours)
+        {
+            Assert.That(coords.Value, Is.EqualTo(grid[coords.Key.i, coords.Key.j]));
+        }
     }
 }

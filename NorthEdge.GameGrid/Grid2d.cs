@@ -8,9 +8,10 @@ namespace NorthEdge.GameGrid;
 /// A 2D grid of generic elements
 /// </summary>
 /// <typeparam name="T">the type of the elements in the <see cref="Grid2d{T}"/></typeparam>
-public class Grid2d<T>(): IEnumerable<IList<T>>
+public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
 {
     #region Properties
+
     /// <summary>
     /// The elements of the <see cref="Grid2d{T}"/> as list of columns containing a list of rows
     /// </summary>
@@ -27,6 +28,23 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     /// The number of columns in the <see cref="Grid2d{T}"/>
     /// </summary>
     public int Columns => _elements.Count == 0 ? 0 : _elements[0].Count;
+    /// <summary>
+    /// Default list of indexes to check when evaluating neighbours
+    /// </summary>
+    protected readonly IList<(int i, int j)> Neighbours = [
+        // vertical
+        (-1,  0),
+        ( 1,  0),
+        // horizontal
+        ( 0, -1),
+        ( 0,  1),
+        // diagonals
+        (-1,  1),
+        ( 1,  1),
+        (-1, -1),
+        ( 1, -1)
+    ];
+
     #endregion
 
     #region Constructor
@@ -47,23 +65,24 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     /// <summary>
     /// Resizes the <see cref="Grid2d{T}"/> to the specified dimensions
     /// </summary>
-    /// <param name="rows">the new number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
-    /// <param name="columns">the new number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="rowCount">the new number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="columnCount">the new number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
     /// <param name="value">the default value for the elements of the <see cref="Grid2d{T}"/></param>
-    /// <exception cref="ArgumentOutOfRangeException">The dimensions must be greater than 0</exception>
-    public void Resize(int rows, int columns, T value = default!)
+    /// <returns>the current <see cref="Grid2d{T}"/></returns>
+    /// <exception cref="ArgumentOutOfRangeException">"The number of rows must be greater than 0"</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The number of columns must be greater than 0</exception> 
+    public Grid2d<T> Resize(int rowCount, int columnCount, T value = default!)
     {
-        if (rows <= 0)
-            throw new ArgumentOutOfRangeException(nameof(rows), "The argument must be greater than 0");
-        if (columns <= 0)
-            throw new ArgumentOutOfRangeException(nameof(columns), "The argument must be greater than 0");
+        SizeCheck(rowCount, columnCount);
 
-        _elements.Resize(rows);
+        _elements.Resize(rowCount);
 
-        foreach (var gridColumns in _elements)
+        foreach (var columns in _elements)
         {
-            gridColumns.Resize(columns, _clampFunc != null ? _clampFunc(value) : value);
+            columns.Resize(columnCount, _clampFunc != null ? _clampFunc(value) : value);
         }
+
+        return this;
     }
     
     #endregion
@@ -113,6 +132,8 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     /// </summary>
     /// <param name="i">the row index of the value to access</param>
     /// <param name="j">the column index of the value to access</param>
+    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
     public T this[int i, int j]
     {
         get => GetAt(i, j);
@@ -125,6 +146,8 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     /// <param name="i">the row index of the value to retrieve</param>
     /// <param name="j">the column index of the value to retrieve</param>
     /// <returns>the value of the element</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
     public T GetAt(int i, int j)
     {
         return Accessor(i, j, element => element);
@@ -136,6 +159,9 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     /// <param name="i">the row index of the value to set</param>
     /// <param name="j">the column index of the value to set</param>
     /// <param name="value">the new value of the element</param>
+    /// <returns>the current <see cref="Grid2d{T}"/></returns>
+    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
     public Grid2d<T> SetAt(int i, int j, T value)
     {
         var clampedValue = _clampFunc != null ? _clampFunc(value) : value;
@@ -146,28 +172,98 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     }
 
     /// <summary>
+    /// Checks that the specified coordinates are within the bounds of the grid
+    /// </summary>
+    /// <param name="i">the row index of the element to check</param>
+    /// <param name="j">the column index of the element to check</param>
+    /// <returns>true if the coordinates are within the bounds of the <see cref="Grid2d{T}"/>; false otherwise</returns>
+    public bool WithinBound(int i, int j)
+    {
+        return BoundaryCheck(i, j, false);
+    }
+
+    /// <summary>
+    /// Returns a sub-<see cref="Grid2d{T}"/> of the current <see cref="Grid2d{T}"/>
+    /// of the specified size at the specified coordinates.
+    /// </summary>
+    /// <param name="i">the row index of the element at which the sub-grid starts</param>
+    /// <param name="j">the column index of the element at which the sub-grid starts</param>
+    /// <param name="rowCount">the number of rows of the sub-grid</param>
+    /// <param name="columnCount">the number of columns of the sub-grid</param>
+    /// <returns>the resulting sub-grid</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
+    /// <exception cref="ArgumentOutOfRangeException">"The number of rows must be greater than 0"</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The number of columns must be greater than 0</exception>
+    public Grid2d<T> SubGrid(int i, int j, int rowCount, int columnCount)
+    {
+        SizeCheck(rowCount, columnCount);
+        BoundaryCheck(i, j);
+        // clamp the size of the sub-grid within the boundaries of the current grid
+        var subGrid = new Grid2d<T>(Math.Min(rowCount, Rows - i), Math.Min(columnCount, Columns - j));
+        // select only the elements within the boundaries of the subgrid
+        foreach (var tuple in Iterate().Where(t => t.i >= i && t.i < i + rowCount && t.j >= j && t.j < j + columnCount))
+        {
+            subGrid[tuple.i - i, tuple.j - j] = tuple.element;
+        }
+
+        return subGrid;
+    }
+
+    /// <summary>
+    /// Performs a boundary check and reports which index is out of bound, optionally throw an exception
+    /// </summary>
+    /// <param name="i">the row index of the element to check</param>
+    /// <param name="j">the column index of the element to check</param>
+    /// <param name="throwOnError">flag specifying if an exception should be thrown if any index is out of bound</param>
+    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
+    private bool BoundaryCheck(int i, int j, bool throwOnError = true)
+    {
+        var columnError = j < 0 || j >= Columns;
+        var rowError = i < 0 || i >= Rows;
+
+        if (throwOnError)
+        {
+            if (rowError)
+                throw new ArgumentOutOfRangeException(nameof(i), i, "Row index i is out of bound");
+
+            if (columnError)
+                throw new ArgumentOutOfRangeException(nameof(j), j, "Column index j is out of bound");
+        }
+
+        return !rowError && !columnError;
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="rowCount">the new number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="columnCount">the new number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <exception cref="ArgumentOutOfRangeException">"The number of rows must be greater than 0"</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The number of columns must be greater than 0</exception>
+    private static void SizeCheck(int rowCount, int columnCount)
+    {
+        if (rowCount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rowCount), rowCount, "The number of rows must be greater than 0");
+        if (columnCount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(columnCount), columnCount, "The number of columns must be greater than 0");
+    }
+
+    /// <summary>
     /// Internal accessor to get or set the value of the element at the specified row and column index.
     /// </summary>
     /// <param name="i">the row index of the value to set</param>
     /// <param name="j">the column index of the value to set</param>
     /// <param name="accessor">functor used to get or set the value of the element</param>
     /// <returns>the value of the element</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
     private T Accessor(int i, int j, Func<T, T> accessor)
     {
-        if (i < _elements.Count)
-        {
-            var row = _elements[i];
+        BoundaryCheck(i, j);
 
-            if (j < row.Count)
-            {
-                return accessor(_elements[i][j]);
-            }
-
-            throw new ArgumentOutOfRangeException(nameof(j));
-        }
-
-        throw new ArgumentOutOfRangeException(nameof(i));
+        return accessor(_elements[i][j]);
     }
 
     #endregion
@@ -201,7 +297,7 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     {
         for(var i = 0; i < _elements.Count; ++i)
         {
-            for (var j = 0; j < _elements[i].Count; j++)
+            for (var j = 0; j < _elements[i].Count; ++j)
             {
                 yield return (i, j, _elements[i][j]);
             }
@@ -225,8 +321,73 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     }
     
     #endregion
+    
+    #region Neighbours
+
+    /// <summary>
+    /// Retrieves a dictionary of neighbours for the element at the specified coordinates; optionally using a
+    /// predicate to select valid neighbours, as well as a list of indexes to iterate through.
+    /// </summary>
+    /// <param name="i">the row index of the element for which to look for neighbours</param>
+    /// <param name="j">the column index of the element for which to look for neighbours</param>
+    /// <param name="predicate">an optional predicate to select valid neighbours</param>
+    /// <param name="indexes">a list of indexes to iterate through to look</param>
+    /// <returns>a dictionary of neighbours keyed by their coordinates</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
+    public IDictionary<(int i, int j), T> NeighboursAt(int i, int j, Func<T,T,bool>? predicate = null, 
+                                                       IList<(int i, int j)>? indexes = null)
+    {
+        var result = new Dictionary<(int i, int j), T>();
+        var current = GetAt(i, j);
+
+        indexes ??= Neighbours;
+
+        foreach (var coords in indexes)
+        {
+            var row = i + coords.i;
+            var col = j + coords.j;
+            
+            // validate that the coordinates are within bounds
+            if (WithinBound(row, col))
+            {
+                var neighbour = GetAt(row, col);
+                // apply the predicate if available
+                if (predicate == null || predicate(current, neighbour))
+                {
+                    result.Add((row, col), neighbour);
+                }
+            }
+        }
+
+        return result;
+    }
+    
+    #endregion
 
     #region Dictionaries
+
+    /// <summary>
+    /// Applies the value contained in the specified dictionary to the <see cref="Grid2d{T}"/>.
+    /// </summary>
+    /// <param name="values">a dictionary of values keyed by coordinates</param>
+    /// <param name="modifiedCount">receives the number of modified values</param>
+    /// <returns>the current <see cref="Grid2d{T}"/></returns>
+    public Grid2d<T> Apply(IDictionary<(int i, int j), T> values, out int modifiedCount)
+    {
+        modifiedCount = 0;
+        
+        foreach (var keyValue in values)
+        {
+            if (WithinBound(keyValue.Key.i, keyValue.Key.j))
+            {
+                this[keyValue.Key.i, keyValue.Key.j] = keyValue.Value;
+                ++modifiedCount;
+            }
+        }
+
+        return this;
+    }
     
     /// <summary>
     /// Transforms the grid into a dictionary of values keyed by their coordinates
@@ -272,6 +433,18 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     #endregion
 
     #region object overrides
+    
+    /// <inheritdoc cref="object"/>
+    public override bool Equals(object? obj)
+    {
+        return ReferenceEquals(this, obj) || obj is Grid2d<T> other && Equals(other);
+    }
+
+    /// <inheritdoc cref="object"/>
+    public override int GetHashCode()
+    {
+        return _elements.GetHashCode();
+    }
 
     /// <inheritdoc cref="object"/>
     public override string ToString()
@@ -285,7 +458,7 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     /// <param name="transformFunc">a functor used to transform the value before printing it</param>
     /// <param name="margin">the margin between each column </param>
     /// <typeparam name="TElement"></typeparam>
-    /// <returns></returns>
+    /// <returns>a string representation of the <see cref="Grid2d{T}"/></returns>
     public string ToString<TElement>(Func<T,TElement> transformFunc, int margin = 1)
     {
         var r = Rows.ToString().Length + 2; // +2 => []
@@ -332,6 +505,48 @@ public class Grid2d<T>(): IEnumerable<IList<T>>
     public IEnumerator GetEnumerator()
     {
         return _elements.GetEnumerator();
+    }
+
+    #endregion
+
+    #region IEquatable implementation / equality operators
+    
+    /// <inheritdoc cref="IEquatable{T}"/>
+    public bool Equals(Grid2d<T>? other)
+    {
+        if (ReferenceEquals(null, other)) 
+            return false;
+        if (ReferenceEquals(this, other)) 
+            return true;
+        // check if the grids are the same dimensions
+        if (Rows != other.Rows || Columns != other.Columns)
+            return false;
+        // the grids are equal if they are of the same dimensions and all their values are equal
+        return !_elements.Where((t, i) => t.SequenceEqual(other._elements[i]) == false).Any();
+    }
+
+    /// <summary>
+    /// Equality operator for <see cref="Grid2d{T}"/> objects.
+    /// Two grids are equal if they are of the same dimensions and all their values are equal.
+    /// </summary>
+    /// <param name="left">the first <see cref="Grid2d{T}"/> to compare</param>
+    /// <param name="right">the second <see cref="Grid2d{T}"/> to compare</param>
+    /// <returns>true if the grids are equal; false otherwise</returns>
+    public static bool operator ==(Grid2d<T>? left, Grid2d<T>? right)
+    {
+        return Equals(left, right);
+    }
+
+    /// <summary>
+    /// Inequality operator for <see cref="Grid2d{T}"/> objects.
+    /// Two grids are different if they are not of the same dimensions or any of their values are not equal.
+    /// </summary>
+    /// <param name="left">the first <see cref="Grid2d{T}"/> to compare</param>
+    /// <param name="right">the second <see cref="Grid2d{T}"/> to compare</param>
+    /// <returns>true if the grids are different; false otherwise</returns>
+    public static bool operator !=(Grid2d<T>? left, Grid2d<T>? right)
+    {
+        return !Equals(left, right);
     }
 
     #endregion
