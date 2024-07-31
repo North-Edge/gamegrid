@@ -66,7 +66,7 @@ public class Grid2dTests<T>
         var value = functor.Value(OutOfBoundDefault);
         var grid = new Grid2d<T>(5, 5, value);
         // all the elements should have the same initial value
-        Assert.That(grid.Elements().All(i => i != null && i.Equals(value)));
+        Assert.That(grid.All(i => i != null && i.Equals(value)));
     }
 
     /// <summary>
@@ -81,7 +81,8 @@ public class Grid2dTests<T>
         var value = functor.Random(-Bound, Bound);
         var grid = new Grid2d<T>(1, 1, value, functor.Clamp);
         // all the values should have been clamped upon initialization
-        Assert.That(grid.Elements().All(i => i != null && functor.BelowMax(i) && functor.AboveMin(i)));
+        Assert.That(grid.All(i => i != null && functor.BelowMax(i) 
+                                            && functor.AboveMin(i)));
     }
 
     /// <summary>
@@ -96,9 +97,9 @@ public class Grid2dTests<T>
         var value = functor.Value(2);
         var grid = new Grid2d<T>(1, 1, value, functor.Clamp);
         // all the values should be valid and unchanged upon initialization
-        Assert.That(grid.Elements().All(i => i != null && i.Equals(value)
-                                                       && functor.BelowMax(i) 
-                                                       && functor.AboveMin(i)));
+        Assert.That(grid.All(i => i != null && i.Equals(value)
+                                            && functor.BelowMax(i) 
+                                            && functor.AboveMin(i)));
     }
 
     /// <summary>
@@ -112,9 +113,12 @@ public class Grid2dTests<T>
         var value = functor.Value(OutOfBoundDefault);
         var grid = new Grid2d<T>(5, 5, value);
         // update all the values with a random value within the bounds
-        grid.Traverse((i, j, _) => grid[i,j] = functor.Random(-Bound, Bound));
+        grid.Update(() => functor.Random(-Bound, Bound));
         // all the values should be equal different from the out of bound default
-        grid.Traverse((_, _, element) => Assert.That(element, Is.Not.EqualTo(value)));
+        foreach (var element in grid)
+        {
+            Assert.That(element, Is.Not.EqualTo(value));
+        }
     }
 
     /// <summary>
@@ -128,11 +132,11 @@ public class Grid2dTests<T>
         var value = functor.Value(-1);
         var grid = new Grid2d<T>(5, 5, value, functor.Clamp);
         // update all the values with a random value within the bounds
-        grid.Traverse((i, j, _) => grid[i,j] = functor.Random(0, Bound));
+        grid.Update(() => functor.Random(0, Bound));
         // all the values should have been updated and clamped 
-        Assert.That(grid.Elements().All(i => i != null && !i.Equals(value)
-                                                       && functor.BelowMax(i)
-                                                       && functor.AboveMin(i)));
+        Assert.That(grid.All(i => i != null && !i.Equals(value)
+                                            && functor.BelowMax(i)
+                                            && functor.AboveMin(i)));
     }
 
     /// <summary>
@@ -148,7 +152,10 @@ public class Grid2dTests<T>
         // the temporary clamped values should be within bounds 
         Assert.That(grid.ClampedValues(functor.Clamp).All(i => i != null && functor.BelowMax(i) && functor.AboveMin(i)));
         // the values shouldn't have been updated
-        grid.Traverse((_, _, element) => Assert.That(element, Is.EqualTo(value)));
+        foreach (var element in grid)
+        {
+            Assert.That(element, Is.EqualTo(value));
+        }
     }
     
     /// <summary>
@@ -160,16 +167,16 @@ public class Grid2dTests<T>
     {
         var grid = new Grid2d<T>(5, 5);
         // update all the values with a random value
-        grid.Traverse((i, j, _) => grid[i,j] = functor.Random(-Bound, Bound));
+        grid.Update(() => functor.Random(-Bound, Bound));
         // update the grid with clamped values
         grid.ClampValues(functor.Clamp);
         // all the values should have been clamped
-        Assert.That(grid.Elements().All(i => i != null && functor.BelowMax(i) && functor.AboveMin(i)));
+        Assert.That(grid.All(i => i != null && functor.BelowMax(i) && functor.AboveMin(i)));
         // update all the values with a value out of the clamping bounds
         var value = functor.Value(OutOfBoundDefault);
-        grid.Traverse((i, j, _) => grid[i,j] = value);
+        grid.Update(() => value);
         // all the values should now be equal to the out-of-bound value
-        Assert.That(grid.Elements().All(i => i != null && i.Equals(value)));
+        Assert.That(grid.All(i => i != null && i.Equals(value)));
     }
 
     /// <summary>
@@ -183,6 +190,7 @@ public class Grid2dTests<T>
         var value = functor.Value(1);
         var expected = functor.String(value);
         var grid = new Grid2d<T>(1, 1, value);
+
         // the resulting string should match the expected output
         Assert.That(grid.ToString(), Is.EqualTo(expected));
     }
@@ -198,21 +206,15 @@ public class Grid2dTests<T>
         var iteration = 0;
         var index = 0;
         // set the values to an increasing value  
-        grid.Traverse((i, j, _) => grid[i,j] = functor.Value(++index));
-        // check the values using the iterator for the grid
-        Assert.Multiple(() => {
-            // set the clamping function but don't apply it yet
-            foreach (IList<T> rows in grid.SetClamp(functor.Clamp, false))
-            {
-                foreach (var element in rows)
-                {
-                    // the values should still be the same despite setting the clamping function
-                    Assert.That(element, Is.EqualTo(functor.Value(++iteration)));
-                }
-            }
-        });
+        grid.Update(() => functor.Value(++index));
+        // set the clamping function but don't apply it yet
+        foreach (var element in grid.SetClamp(functor.Clamp, false))
+        {
+            // the values should still be the same despite setting the clamping function
+            Assert.That(element, Is.EqualTo(functor.Value(++iteration)));
+        }
         // set the values to random values  
-        grid.Traverse((i, j, _) => grid[i,j] = functor.Random(-Bound, Bound));
+        grid.Update(() => functor.Random(-Bound, Bound));
         // iterate as a dictionary of elements keyed by (row,column) structures
         Assert.Multiple(() => {
             foreach (var keyValue in grid.ToDictionary())
@@ -225,14 +227,14 @@ public class Grid2dTests<T>
         });
         var value = functor.Value(OutOfBoundDefault);
         // remove the clamping function and update all the values with a value out of the clamping bounds
-        grid.SetClamp(null, true).Traverse((i, j, _) => grid[i,j] = value);
+        grid.SetClamp(null, true).Update(() => value);
 
         Assert.Multiple(() =>
         {
             // all the values should now be equal to the out-of-bound value
-            Assert.That(grid.Elements().All(i => i != null && i.Equals(value)));
+            Assert.That(grid.All(i => i != null && i.Equals(value)));
             // set the clamping function again and apply it straight away: all the values should have been clamped
-            Assert.That(grid.SetClamp(functor.Clamp, true).SelectMany(i => i).All(i => functor.AboveMin(i) && functor.BelowMax(i)));
+            Assert.That(grid.SetClamp(functor.Clamp, true).All(i => functor.AboveMin(i) && functor.BelowMax(i)));
         });
     }
 
@@ -254,7 +256,7 @@ public class Grid2dTests<T>
             Assert.That(grid1.Equals(grid1), Is.True);
             Assert.That(grid1 == grid2, Is.True);
             // set the values to an increasing value  
-            grid1.Traverse((i, j, _) => grid1[i,j] = functor.Value(++index));
+            grid1.Update(() => functor.Value(++index));
             // the grids shouldn't be equal anymore
             Assert.That(grid1 != grid2, Is.True);
             Assert.That(grid3.Equals(null), Is.False);

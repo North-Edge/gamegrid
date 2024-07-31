@@ -165,7 +165,7 @@ public class Grid2dCommonTests
     {
         var grid = new Grid2d<TestValue>(5, 5);
         // set all the value of the elements to the value of their column index
-        grid.Traverse((i, j, _) => grid[i, j] = new TestValue((ValuesEnum)j));
+        grid.Update((_, j) => new TestValue((ValuesEnum)j));
         // transform the grid into a dictionary of coordinates for each value
         var coordinates = grid.ToCoordinates();
         // iterate the coordinates dictionary
@@ -225,7 +225,7 @@ public class Grid2dCommonTests
             var columns = random.Next(1, 25);
             var grid = new Grid2d<int>(rows, columns);
             // set the values to random values
-            grids.Add(grid.Traverse((i, j, _) => grid[i,j] = random.Next(-9999999, 9999999)));
+            grids.Add(grid.Update(() => random.Next(-9999999, 9999999)));
         }
 
         Assert.That(grids.ToHashSet(), Has.Count.EqualTo(gridCount));
@@ -240,7 +240,7 @@ public class Grid2dCommonTests
         var grid = new Grid2d<int>(5, 5);
         var index = 0;
         // set the values to an increasing value  
-        grid.Traverse((i, j, _) => grid[i,j] = ++index);
+        grid.Update(() => ++index);
         
         Assert.Multiple(() =>
         {
@@ -273,7 +273,7 @@ public class Grid2dCommonTests
         var grid3 = new Grid2d<int>(2, 2);
 
         // set the values to an increasing value
-        grid1.Traverse((i, j, _) => grid1[i,j] = ++index);
+        grid1.Update(() => ++index);
 
         IList<(int i, int j)> indexes = [
             (-1,  0), ( 1,  0),

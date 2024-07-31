@@ -8,7 +8,7 @@ namespace NorthEdge.GameGrid;
 /// A 2D grid of generic elements
 /// </summary>
 /// <typeparam name="T">the type of the elements in the <see cref="Grid2d{T}"/></typeparam>
-public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
+public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
 {
     #region Properties
 
@@ -28,22 +28,6 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
     /// The number of columns in the <see cref="Grid2d{T}"/>
     /// </summary>
     public int Columns => _elements.Count == 0 ? 0 : _elements[0].Count;
-    /// <summary>
-    /// Default list of indexes to check when evaluating neighbours
-    /// </summary>
-    protected readonly IList<(int i, int j)> Neighbours = [
-        // vertical
-        (-1,  0),
-        ( 1,  0),
-        // horizontal
-        ( 0, -1),
-        ( 0,  1),
-        // diagonals
-        (-1,  1),
-        ( 1,  1),
-        (-1, -1),
-        ( 1, -1)
-    ];
 
     #endregion
 
@@ -110,9 +94,9 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
     /// <returns>the temporary enumerable of clamped values</returns>
     public IEnumerable<T> ClampedValues(Func<T,T> clampFunc)
     {
-        return Elements().Select(clampFunc);
+        return this.Select(clampFunc);
     }
-    
+
     /// <summary>
     /// Clamps the value of the elements of the <see cref="Grid2d{T}"/> using the specified clamping functor.
     /// </summary>
@@ -120,7 +104,7 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
     /// <returns>the current <see cref="Grid2d{T}"/></returns>
     public Grid2d<T> ClampValues(Func<T,T> clampFunc)
     {
-        return Traverse((i, j, element) => _elements[i][j] = clampFunc(element));
+        return Update((i, j) => clampFunc(this[i, j]));
     }
 
     #endregion
@@ -202,9 +186,9 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
         // clamp the size of the sub-grid within the boundaries of the current grid
         var subGrid = new Grid2d<T>(Math.Min(rowCount, Rows - i), Math.Min(columnCount, Columns - j));
         // select only the elements within the boundaries of the subgrid
-        foreach (var tuple in Iterate().Where(t => t.i >= i && t.i < i + rowCount && t.j >= j && t.j < j + columnCount))
+        foreach (var indexes in Iterate().Where(t => t.i >= i && t.i < i + rowCount && t.j >= j && t.j < j + columnCount))
         {
-            subGrid[tuple.i - i, tuple.j - j] = tuple.element;
+            subGrid[indexes.i - i, indexes.j - j] = indexes.element;
         }
 
         return subGrid;
@@ -236,7 +220,7 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
     }
 
     /// <summary>
-    /// 
+    /// Checks if the specified dimensions are valid.
     /// </summary>
     /// <param name="rowCount">the new number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
     /// <param name="columnCount">the new number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
@@ -268,15 +252,66 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
 
     #endregion
     
+    #region IEnumerable implementation
+
+    /// <inheritdoc cref="IEnumerable{T}"/>
+    IEnumerator<T> IEnumerable<T>.GetEnumerator()
+    {
+        return Enumerator();
+    }
+    
+    /// <inheritdoc cref="IEnumerable{T}"/>
+    public IEnumerator GetEnumerator()
+    {
+        return Enumerator();
+    }
+
+    /// <summary>Returns an enumerator that iterates through a collection.</summary>
+    /// <returns>An <see cref="T:System.Collections.IEnumerator" /> object that can be used to iterate through the collection.</returns>
+    private IEnumerator<T> Enumerator()
+    {
+        foreach (var rows in _elements)
+        {
+            foreach (var item in rows)
+            {
+                yield return item;
+            }
+        }
+    }
+
+    #endregion
+    
     #region Iterators
     
     /// <summary>
-    /// Iterates on all the elements of the <see cref="Grid2d{T}"/>.
+    /// Traverses all the elements of the <see cref="Grid2d{T}"/> and update the values
+    /// using the specified action that takes the row and column indexes as its parameters. 
     /// </summary>
-    /// <returns>enumerable of all the elements of the <see cref="Grid2d{T}"/></returns>
-    public IEnumerable<T> Elements()
+    /// <param name="transformFunc">the action to apply on all the elements</param>
+    /// <returns>the current <see cref="Grid2d{T}"/></returns>
+    public Grid2d<T> Update(Func<int, int, T> transformFunc)
     {
-        return _elements.SelectMany(rows => rows);
+        foreach (var index in Iterate())
+        {
+            this[index.i, index.j] = transformFunc(index.i, index.j);
+        }
+
+        return this;
+    }
+    
+    /// <summary>
+    /// Traverses all the elements of the <see cref="Grid2d{T}"/> and update the values using the specified action. 
+    /// </summary>
+    /// <param name="transformFunc">the action to apply on all the elements</param>
+    /// <returns>the current <see cref="Grid2d{T}"/></returns>
+    public Grid2d<T> Update(Func<T> transformFunc)
+    {
+        foreach (var indexes in Iterate())
+        {
+            this[indexes.i, indexes.j] = transformFunc();
+        }
+
+        return this;
     }
 
     /// <summary>
@@ -284,9 +319,9 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
     /// the row, column and value as its parameters; returning temporary enumerable of the resulting elements.
     /// </summary>
     /// <returns>enumerable of the transformed values</returns>
-    public IEnumerable<TResult> Transform<TResult>(Func<int, int, T, TResult> transformFunc)
+    public IEnumerable<TResult> Traverse<TResult>(Func<int, int, T, TResult> transformFunc)
     {
-        return Iterate().Select(t => transformFunc(t.i, t.j, t.element));
+        return Iterate().Select(indexes => transformFunc(indexes.i, indexes.j, indexes.element));
     }
 
     /// <summary>
@@ -302,22 +337,6 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
                 yield return (i, j, _elements[i][j]);
             }
         }
-    }
-
-    /// <summary>
-    /// Traverses all the elements of the <see cref="Grid2d{T}"/> and applies the
-    /// specified action receiving the row, column and value as its parameters. 
-    /// </summary>
-    /// <param name="action">the action to apply on all the elements</param>
-    /// <returns>the current <see cref="Grid2d{T}"/></returns>
-    public Grid2d<T> Traverse(Action<int, int, T> action)
-    {
-        foreach (var tuple in Iterate())
-        {
-            action(tuple.i, tuple.j, tuple.element);
-        }
-
-        return this;
     }
     
     #endregion
@@ -341,7 +360,19 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
         var result = new Dictionary<(int i, int j), T>();
         var current = GetAt(i, j);
 
-        indexes ??= Neighbours;
+        indexes ??= [
+            // vertical
+            (-1,  0),
+            ( 1,  0),
+            // horizontal
+            ( 0, -1),
+            ( 0,  1),
+            // diagonals
+            (-1,  1),
+            ( 1,  1),
+            (-1, -1),
+            ( 1, -1)
+        ];
 
         foreach (var coords in indexes)
         {
@@ -395,7 +426,7 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
     /// <returns>a dictionary of values keyed by their coordinates</returns>
     public IDictionary<(int i, int j), T> ToDictionary()
     {
-        return Transform((i, j, element) => new KeyValuePair<(int i, int j), T>((i, j), element)).ToDictionary();
+        return Traverse((i, j, element) => new KeyValuePair<(int i, int j), T>((i, j), element)).ToDictionary();
     }
 
     /// <summary>
@@ -413,17 +444,17 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
         var result = new Dictionary<T, IList<(int i, int j)>>();
 #pragma warning restore CS8714 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match 'notnull' constraint.
 
-        foreach(var tuple in Iterate())
+        foreach(var indexes in Iterate())
         {
-            var value = (tuple.i, tuple.j);
+            var value = (indexes.i, indexes.j);
 
-            if (result.TryGetValue(tuple.element, out var list))
+            if (result.TryGetValue(indexes.element, out var list))
             {
                 list.Add(value);
             }
             else
             {
-                result[tuple.element] = [value];
+                result[indexes.element] = [value];
             }
         }
 
@@ -461,50 +492,34 @@ public class Grid2d<T>(): IEnumerable<IList<T>>, IEquatable<Grid2d<T>>
     /// <returns>a string representation of the <see cref="Grid2d{T}"/></returns>
     public string ToString<TElement>(Func<T,TElement> transformFunc, int margin = 1)
     {
-        var r = Rows.ToString().Length + 2; // +2 => []
-        var c = Columns.ToString().Length;
-        var sb = new StringBuilder();
-        var maxWidth = c + 2;               // +2 => []
-        // clamp the margin to be positive
-        margin = Math.Max(margin, 0);
-        // determine the width of the longest element
-        Traverse((_, _, element) => {
+        var rw = Rows.ToString().Length + 2; // +2 => []
+        var cw = Columns.ToString().Length;
+        var stringBuilder = new StringBuilder();
+        // determine the width of the longest element +2 => []
+        var maxWidth = this.Aggregate(cw + 2, (max, element) =>
+        {
             var elementStr = transformFunc(element)?.ToString() ?? "null";
-    
-            maxWidth = Math.Max(maxWidth, elementStr.Length);
+
+            return Math.Max(max, elementStr.Length);
         });
         // add the padding for the height before printing the header
-        sb.Append(new string(' ', r));
+        stringBuilder.Append(new string(' ', rw));
         // print the header consisting of all the column indexes
         for (var j = 0; j < Columns; ++j)
-            sb.Append($"|{j}|".PadLeft(maxWidth + margin));
+            stringBuilder.Append($"|{j}|".PadLeft(maxWidth + margin));
         // print all the element of the grid
-        Traverse((i, j, element) => {
-            var elementStr = transformFunc(element)?.ToString() ?? "null";
-            // print the row index at the beginning of each row
-            if (j == 0)
-                sb.Append('\n' + $"[{i}]".PadLeft(r));
+        stringBuilder = Iterate().Aggregate(stringBuilder, (sb, indexes) => {
+            var elementStr = transformFunc(indexes.element)?.ToString() ?? "null";
+            // print row index at the beginning of each row
+            if (indexes.j == 0)
+                sb.Append('\n' + $"[{indexes.i}]".PadLeft(rw));
             // print the element
             sb.Append(elementStr.PadLeft(maxWidth + margin));
+
+            return sb;
         });
 
-        return sb.ToString();
-    }
-
-    #endregion
-
-    #region IEnumerable implementation
-
-    /// <inheritdoc cref="IEnumerable{T}"/>
-    IEnumerator<IList<T>> IEnumerable<IList<T>>.GetEnumerator()
-    {
-        return _elements.Cast<IList<T>>().GetEnumerator();
-    }
-
-    /// <inheritdoc cref="IEnumerable{T}"/>
-    public IEnumerator GetEnumerator()
-    {
-        return _elements.GetEnumerator();
+        return stringBuilder.ToString();
     }
 
     #endregion
