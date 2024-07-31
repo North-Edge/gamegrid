@@ -208,6 +208,26 @@ public class Grid2dCommonTests
             }
         });
     }
+    
+    /// <summary>
+    /// Tests the Traverse method
+    /// </summary>
+    [Test]
+    public void TestTraverse()
+    {
+        List<ValuesEnum> transformedValues = [ValuesEnum.Blue, ValuesEnum.Green, ValuesEnum.Yellow];
+        List<int> expectedValues = [1, 2, 4];
+        var grid = new Grid2d<int>(1, 3) {
+            [0, 0] = 1, // Blue
+            [0, 1] = 2, // Green
+            [0, 2] = 4  // Yellow
+        };
+
+        // the resulting string should match the expected output
+        Assert.That(grid.Traverse((_, _, e) => (ValuesEnum)e), Is.EqualTo(transformedValues));
+        // the values in the grid should not have changed
+        Assert.That(grid, Is.EqualTo(expectedValues));
+    }
 
     /// <summary>
     /// Tests the cast to string using an action to transform the value of the elements
@@ -289,6 +309,30 @@ public class Grid2dCommonTests
             Assert.Throws<ArgumentOutOfRangeException>(() => _ = grid.SubGrid(4, 4, 1, 1));
             // check that trying to retrieve a subgrid of invalid dimensions
             Assert.Throws<ArgumentOutOfRangeException>(() => _ = grid.SubGrid(0, 0, 0, 0));
+        });
+    }
+
+    /// <summary>
+    /// Tests the Apply method
+    /// </summary>
+    [Test]
+    public void TestApply()
+    {
+        var appliedValues = new Dictionary<(int,int), int> {
+            { (0, 0), 50 },
+            { (0, 1), 99 },
+            { (0, 2), 10 },
+        };
+        List<int> expectedValues = [50, 99, 10];
+        var grid = new Grid2d<int>(1, 3);
+
+        // the resulting string should match the expected output
+        grid.Apply(appliedValues, out var modified);
+        Assert.Multiple(() =>
+        {
+            Assert.That(modified, Is.EqualTo(3));
+            // the values in the grid should not have changed
+            Assert.That(grid, Is.EqualTo(expectedValues));
         });
     }
 
