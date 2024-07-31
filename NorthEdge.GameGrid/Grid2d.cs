@@ -282,6 +282,33 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     #endregion
     
     #region Iterators
+
+    /// <summary>
+    /// Retrieves the elements of the row at the specified index.
+    /// </summary>
+    /// <param name="i">the index of the row</param>
+    /// <returns>the row at the specified index</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
+    public IEnumerable<T> Row(int i)
+    {
+        BoundaryCheck(i, 0);
+        
+        return _elements[i];
+    }
+
+    /// <summary>
+    /// Retrieves the elements of the column at the specified index.
+    /// </summary>
+    /// <param name="j">the index of the column</param>
+    /// <returns>the column at the specified index</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
+    public IEnumerable<T> Column(int j)
+    {
+        BoundaryCheck(0, j);
+
+        return Iterate().Where(indexes => indexes.j == j)
+                        .Select(indexes => indexes.element);
+    }
     
     /// <summary>
     /// Traverses all the elements of the <see cref="Grid2d{T}"/> and update the values

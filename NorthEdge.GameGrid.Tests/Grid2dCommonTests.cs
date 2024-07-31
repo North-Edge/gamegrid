@@ -65,6 +65,38 @@ public class Grid2dCommonTests
             Assert.That(grid.Columns, Is.EqualTo(columns - 1));
         });
     }
+    
+    /// <summary>
+    /// Test the row accessor
+    /// </summary>
+    [Test]
+    public void TestRowAccessor()
+    {
+        var grid = new Grid2d<int>(3, 3);
+        List<int> expected = [4, 5, 6];
+        var index = 0;
+        // set the values to an increasing value  
+        grid.Update(() => ++index);
+
+        Assert.That(grid.Row(1), Is.EqualTo(expected));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Assert.That(grid.Row(5), Is.EqualTo(expected)));
+    }
+    
+    /// <summary>
+    /// Test the column accessor
+    /// </summary>
+    [Test]
+    public void TestColumnAccessor()
+    {
+        var grid = new Grid2d<int>(3, 3);
+        List<int> expected = [2, 5, 8];
+        var index = 0;
+        // set the values to an increasing value  
+        grid.Update(() => ++index);
+
+        Assert.That(grid.Column(1), Is.EqualTo(expected));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Assert.That(grid.Column(5), Is.EqualTo(expected)));
+    }
 
     /// <summary>
     /// Test the constructor with an invalid row
@@ -101,7 +133,6 @@ public class Grid2dCommonTests
             // the setters should throw an exception when trying to pass an out-of-bound value for the row index
             Assert.Throws<ArgumentOutOfRangeException>(() => grid.SetAt(1, 0, 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => grid[1,0] = 0);
-            
         });
     }
 
