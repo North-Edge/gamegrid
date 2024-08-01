@@ -4,12 +4,20 @@
 /// A test object used as a type in the tests using generic types.
 /// </summary>
 /// <param name="value">the internal value of the test object</param>
-public class TestValue(ValuesEnum value = ValuesEnum.Pink): IEquatable<TestValue>
+public class TestValue(ValuesEnum value = ValuesEnum.Pink): IEquatable<TestValue>, IDisposable
 {
     /// <summary>
     /// The internal value of the test object
     /// </summary>
     public readonly ValuesEnum Value = value;
+    /// <summary>
+    /// Flag specifying if the object is disposed
+    /// </summary>
+    public bool IsDisposed { get; private set; }
+    /// <summary>
+    /// Counts the number of calls to Dispose
+    /// </summary>
+    public int DisposeCalls { get; private set; }
 
     /// <summary>
     /// Clamps the value of the test object
@@ -55,4 +63,16 @@ public class TestValue(ValuesEnum value = ValuesEnum.Pink): IEquatable<TestValue
     }
 
     #endregion
+
+    /// <inheritdoc cref="IDisposable"/>
+    public void Dispose()
+    {
+        ++DisposeCalls;
+
+        if (IsDisposed == false)
+        {
+            GC.SuppressFinalize(this);
+            IsDisposed = true;
+        }
+    }
 }

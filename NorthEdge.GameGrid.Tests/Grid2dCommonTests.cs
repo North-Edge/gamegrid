@@ -45,8 +45,9 @@ public class Grid2dCommonTests
     public void TestResize()
     {
         var grid = new Grid2d<int>();
-        const int rows = 10;
         const int columns = 8;
+        const int rows = 10;
+        var index = 0;
 
         // expand the grid
         grid.Resize(rows, columns);
@@ -55,6 +56,35 @@ public class Grid2dCommonTests
         {
             Assert.That(grid.Rows, Is.EqualTo(rows));
             Assert.That(grid.Columns, Is.EqualTo(columns));
+            Assert.That(grid.Count(), Is.EqualTo(rows * columns));
+        });
+        // try to resize the grid to the same size
+        grid.Resize(rows, columns);
+        // the grid size shouldn't have changed
+        Assert.Multiple(() =>
+        {
+            Assert.That(grid.Rows, Is.EqualTo(rows));
+            Assert.That(grid.Columns, Is.EqualTo(columns));
+            Assert.That(grid.Count(), Is.EqualTo(rows * columns));
+        });
+        // expand the grid, only changing the columns
+        grid.Resize(rows, columns + 2);
+        // the size should match the new dimensions
+        Assert.Multiple(() =>
+        {
+            Assert.That(grid.Rows, Is.EqualTo(rows));
+            Assert.That(grid.Columns, Is.EqualTo(columns + 2));
+            Assert.That(grid.Count(), Is.EqualTo(rows * (columns + 2)));
+        });
+        // expand the grid, only changing the rows
+        grid.Resize(rows + 5, columns + 2);
+        grid.Update(() => ++index);
+        // the size should match the new dimensions
+        Assert.Multiple(() =>
+        {
+            Assert.That(grid.Rows, Is.EqualTo(rows + 5));
+            Assert.That(grid.Columns, Is.EqualTo(columns + 2));
+            Assert.That(grid.Count(), Is.EqualTo((rows + 5) * (columns + 2)));
         });
         // shrink the grid
         grid.Resize(rows - 3, columns - 1);
@@ -63,6 +93,25 @@ public class Grid2dCommonTests
         {
             Assert.That(grid.Rows, Is.EqualTo(rows - 3));
             Assert.That(grid.Columns, Is.EqualTo(columns - 1));
+            Assert.That(grid.Count(), Is.EqualTo((rows - 3) * (columns - 1)));
+        });
+        // shrink the grid, only changing the columns
+        grid.Resize(rows - 3, columns - 3);
+        // the size should match the new dimensions
+        Assert.Multiple(() =>
+        {
+            Assert.That(grid.Rows, Is.EqualTo(rows - 3));
+            Assert.That(grid.Columns, Is.EqualTo(columns - 3));
+            Assert.That(grid.Count(), Is.EqualTo((rows - 3) * (columns - 3)));
+        });
+        // shrink the grid, only changing the rows
+        grid.Resize(rows - 5, columns - 3);
+        // the size should match the new dimensions
+        Assert.Multiple(() =>
+        {
+            Assert.That(grid.Rows, Is.EqualTo(rows - 5));
+            Assert.That(grid.Columns, Is.EqualTo(columns - 3));
+            Assert.That(grid.Count(), Is.EqualTo((rows - 5) * (columns - 3)));
         });
     }
     
@@ -119,61 +168,40 @@ public class Grid2dCommonTests
     }
 
     /// <summary>
-    /// Tests the getters/setters with an invalid row index
+    /// Tests the indexers with an invalid row index
     /// </summary>
     [Test]
-    public void TestAccessWithInvalidRow()
+    public void TestAIndexersWithInvalidCoordinates()
     {
         var grid = new Grid2d<int>(1, 1);
         Assert.Multiple(() =>
         {
-            // the getters should throw an exception when trying to pass an out-of-bound value for the row index
+            // the indexer should throw an exception when trying to pass an out-of-bound value for the row index
             Assert.Throws<ArgumentOutOfRangeException>(() => Assert.That(grid[1,0], Is.EqualTo(0)));
-            Assert.Throws<ArgumentOutOfRangeException>(() => grid.GetAt(1, 0));
-            // the setters should throw an exception when trying to pass an out-of-bound value for the row index
-            Assert.Throws<ArgumentOutOfRangeException>(() => grid.SetAt(1, 0, 0));
+            // the indexer should throw an exception when trying to pass an out-of-bound value for the row index
             Assert.Throws<ArgumentOutOfRangeException>(() => grid[1,0] = 0);
-        });
-    }
-
-    /// <summary>
-    /// Tests the getters/setters with an invalid column index
-    /// </summary>
-    [Test]
-    public void TestAccessWithInvalidColumn()
-    {
-        var grid = new Grid2d<int>(1, 1);
-        Assert.Multiple(() =>
-        {
-            // the getters should throw an exception when trying to pass an out-of-bound value for the column index
+            // the indexer should throw an exception when trying to pass an out-of-bound value for the column index
             Assert.Throws<ArgumentOutOfRangeException>(() => Assert.That(grid[0,1], Is.EqualTo(0)));
-            Assert.Throws<ArgumentOutOfRangeException>(() => grid.GetAt(0, 1));
-            // the setters should throw an exception when trying to pass an out-of-bound value for the column index
-            Assert.Throws<ArgumentOutOfRangeException>(() => grid.SetAt(0, 1, 0));
+            // the indexer should throw an exception when trying to pass an out-of-bound value for the column index
             Assert.Throws<ArgumentOutOfRangeException>(() => grid[0,1] = 0);
         });
     }
     
     /// <summary>
-    /// Tests the getters/setters
+    /// Tests the indexers
     /// </summary>
     [Test]
     public void TestValueAccess()
     {
         const int value = 999;
         var grid = new Grid2d<int>(1, 1);
-        Assert.Multiple(() =>
-        {
-            // the value should be equal to the default value (0)
-            Assert.That(grid.GetAt(0, 0), Is.EqualTo(0));
-            Assert.That(grid[0, 0], Is.EqualTo(0));
-            // change the value of the element using the SetAt method and check that the value has changed
-            Assert.That(grid.SetAt(0, 0, value).GetAt(0, 0), Is.EqualTo(value));
-            // change the value of the element using the indexer
-            grid[0, 0] = value + 1;
-            // the value should be changed
-            Assert.That(grid[0, 0], Is.EqualTo(value + 1));
-        });
+
+        // the value should be equal to the default value (0)
+        Assert.That(grid[0, 0], Is.EqualTo(0));
+        // change the value of the element using the indexer
+        grid[0, 0] = value;
+        // the value should be changed
+        Assert.That(grid[0, 0], Is.EqualTo(value));
     }
 
     /// <summary>

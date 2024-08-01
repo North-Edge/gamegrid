@@ -8,8 +8,4 @@
         <RootNamespace>NorthEdge.GameGrid</RootNamespace>
     </PropertyGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\NorthEdge.Utilities\NorthEdge.Utilities.csproj" />
-    </ItemGroup>
-
 </Project>

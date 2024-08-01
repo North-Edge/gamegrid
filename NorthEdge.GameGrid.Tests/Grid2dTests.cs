@@ -78,7 +78,7 @@ public class Grid2dTests<T>
     public void TestConstructorWithClampedValue(TestFunctors<T> functor)
     {
         // create a grid from a random value
-        var value = functor.Random(-Bound, Bound);
+        var value = functor.Value(OutOfBoundDefault);
         var grid = new Grid2d<T>(1, 1, value, functor.Clamp);
         // all the values should have been clamped upon initialization
         Assert.That(grid.All(i => i != null && functor.BelowMax(i) 
@@ -263,5 +263,46 @@ public class Grid2dTests<T>
             Assert.That(grid3, Is.Not.EqualTo(grid2));
             Assert.That(grid2.Resize(3, 3), Is.EqualTo(grid3));
         });
+    }
+
+    /// <summary>
+    /// Tests the comparison operators of the <see cref="Grid2d{T}"/>
+    /// </summary>
+    /// <param name="functor">the datapoint for the current theory</param>
+    [Theory]
+    public void TestElementEvents(TestFunctors<T> functor)
+    {
+        // create a new grid filled with 0
+        var grid = new Grid2d<T>(5, 5, functor.Value(0), null, 
+        (g, args) => {
+            var grid = g as Grid2d<T>;
+
+            if (grid != null)
+            {
+                // check that replacing the element in the element added event doesn't trigger an infinite loop
+                grid[args.i, args.j] = functor.Value(5);
+            }
+        }, 
+        (_, args) => {
+            // dispose the object if it is disposable
+            if (args.element is IDisposable disposable) {
+                disposable.Dispose();
+            }
+        });
+        // keep a list of all the elements of the grid for later
+        var elements = grid.ToList();
+        // assert that all the elements have been set to 5 using the event handler
+        Assert.That(elements.All(e => e != null && e.Equals(functor.Value(5))));
+        // empty the list and check that it has now 0 element
+        Assert.That(grid.Clear().Count, Is.EqualTo(0));
+        Assert.Multiple(() =>
+        {
+            // check that the grid dimensions are now 0
+            Assert.That(grid.Columns, Is.EqualTo(0));
+            Assert.That(grid.Rows, Is.EqualTo(0));
+        });
+        // check that the old elements of the list that are disposable have been disposed by the event handler
+        Assert.That(elements.All(element => element is not TestValue testValue
+                                         || testValue is { IsDisposed: true, DisposeCalls: 1 }));
     }
 }

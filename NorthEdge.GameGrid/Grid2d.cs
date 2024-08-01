@@ -1,5 +1,4 @@
-﻿using NorthEdge.Utilities;
-using System.Collections;
+﻿using System.Collections;
 using System.Text;
 
 namespace NorthEdge.GameGrid;
@@ -13,6 +12,13 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     #region Properties
 
     /// <summary>
+    /// Arguments passed to events invoked when elements are added or removed.
+    /// </summary>
+    /// <param name="i">the row index of the element tied to the event</param>
+    /// <param name="j">the column index of the element tied to the event</param>
+    /// <param name="element">the element tied to the event</param>
+    public sealed record ElementEventArgs(int i, int j, T element);
+    /// <summary>
     /// The elements of the <see cref="Grid2d{T}"/> as list of columns containing a list of rows
     /// </summary>
     private readonly List<List<T>> _elements = [];
@@ -21,13 +27,26 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     /// </summary>
     private Func<T, T>? _clampFunc;
     /// <summary>
+    /// An event invoked when an element is removed from the grid
+    /// </summary>
+    private EventHandler<ElementEventArgs>? _onElementRemovedEvent { get; }
+    /// <summary>
+    /// An event invoked when an element is added to the grid
+    /// </summary>
+    private EventHandler<ElementEventArgs>? _onElementAddedEvent { get; }
+    /// <summary>
+    /// Stack of events raised by the grid.
+    /// </summary>
+    private readonly Stack<(int i, int j, bool added)> _eventStack = new();
+
+    /// <summary>
     /// The number of rows in the <see cref="Grid2d{T}"/>
     /// </summary>
-    public int Rows => _elements.Count;
+    public int Rows { get; private set; }
     /// <summary>
     /// The number of columns in the <see cref="Grid2d{T}"/>
     /// </summary>
-    public int Columns => _elements.Count == 0 ? 0 : _elements[0].Count;
+    public int Columns { get; private set; }
 
     #endregion
 
@@ -38,11 +57,18 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     /// </summary>
     /// <param name="rows">the number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
     /// <param name="columns">the number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="onElementAddedEvent">an event invoked when an element is added to the grid</param>
+    /// <param name="onElementRemovedEvent">an event invoked when an element is removed from the grid</param>
     /// <param name="value">the default value for the elements of the <see cref="Grid2d{T}"/></param>
     /// <param name="clampFunc">the optional functor used to clamp the value of the elements of the <see cref="Grid2d{T}"/></param>
-    public Grid2d(int rows, int columns, T value = default!, Func<T,T>? clampFunc = null): this()
+    public Grid2d(int rows, int columns, T value = default!, Func<T,T>? clampFunc = null, 
+                  EventHandler<ElementEventArgs>? onElementAddedEvent = null,
+                  EventHandler<ElementEventArgs>? onElementRemovedEvent = null): this()
     {
+        _onElementRemovedEvent = onElementRemovedEvent;
+        _onElementAddedEvent = onElementAddedEvent;
         _clampFunc = clampFunc;
+
         Resize(rows, columns, value);
     }
 
@@ -59,16 +85,100 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     {
         SizeCheck(rowCount, columnCount);
 
-        _elements.Resize(rowCount);
+        return InternalResize(rowCount, columnCount, value);
+    }
 
-        foreach (var columns in _elements)
+    /// <summary>
+    /// Empties the grid of all its elements.
+    /// </summary>
+    /// <returns>the current <see cref="Grid2d{T}"/></returns>
+    public Grid2d<T> Clear()
+    {
+        return InternalResize(0, 0);
+    }
+
+    /// <summary>
+    /// Resizes the <see cref="Grid2d{T}"/> to the specified dimensions
+    /// </summary>
+    /// <param name="rowCount">the new number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="columnCount">the new number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="value">the default value for the elements of the <see cref="Grid2d{T}"/></param>
+    /// <returns>the current <see cref="Grid2d{T}"/></returns>
+    /// <exception cref="ArgumentOutOfRangeException">"The number of rows must be greater than 0"</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The number of columns must be greater than 0</exception> 
+    private Grid2d<T> InternalResize(int rowCount, int columnCount, T value = default!)
+    {
+        if (rowCount == Rows && columnCount == Columns)
+            return this;
+        
+        var colStart = Math.Max(Columns, columnCount);
+        var rowStart = Math.Max(Rows, rowCount);
+        var colDiff = Columns - columnCount;
+        var rowDiff = Rows - rowCount;
+        var oldCol = Columns;
+        var oldRow = Rows;
+
+        Columns = columnCount;
+        Rows = rowCount;
+
+        if (rowDiff < 0)
         {
-            columns.Resize(columnCount, _clampFunc != null ? _clampFunc(value) : value);
+            // preallocate enough items in the list
+            _elements.Capacity = rowCount;
+
+            for (var i = oldRow; i < rowCount; ++i)
+            {
+                _elements.Insert(i, new List<T>(columnCount));
+            }
+        }
+
+        for (var i = rowStart; --i >= 0;)
+        {
+            for (var j = colStart; --j >= 0;)
+            {
+                // if shrinking rows, delete the elements starting at 0, up to the old column count 
+                // if shrinking columns, delete the elements from the new row count to the old count   
+                if ((rowDiff > 0 && i >= oldRow) || (colDiff > 0 && j >= columnCount))
+                {
+                    var element = _elements[i][j];
+                    // remove the element from the list
+                    _elements[i].RemoveAt(j);
+                    // trigger the event to notify that the element was removed
+                    OnElementChanged(i, j, element, false);
+                }
+                // if growing rows, create a whole row starting from 0 to the desired size
+                // if growing columns, create new elements from the old size to the new one
+                else if (rowDiff < 0 && i >= oldRow || (colDiff < 0 && j >= oldCol))
+                {
+                    var element = value ?? CreateElement(value);
+                    var col = colStart - j - 1;
+                    // insert a new element in the list
+                    _elements[i].Add(_clampFunc != null ? _clampFunc(element) : element);
+                    // trigger an event to notify that the element was added
+                    OnElementChanged(i, col, _elements[i][col], true);
+                }
+            }
+        }
+        // remove the lists that are deleted
+        if (rowDiff > 0)
+        {
+            _elements.RemoveRange(rowCount, oldRow - rowCount);
         }
 
         return this;
     }
-    
+
+    /// <summary>
+    /// Creates a new element of type T
+    /// </summary>
+    /// <param name="defaultValue">a default value in case the type doesn't have a parameterless constructor</param>
+    /// <returns>a new element of type T</returns>
+    private static T CreateElement(T defaultValue)
+    {
+        return typeof(T).GetConstructor(Type.EmptyTypes) == null 
+             ? defaultValue : Activator.CreateInstance<T>();
+    }
+
     #endregion
     
     #region Clamping
@@ -109,6 +219,34 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
 
     #endregion
     
+    #region Events
+    
+    /// <summary>
+    /// Raises an event if an element is added or removed.
+    /// </summary>
+    /// <param name="i">the row index of the element tied to the event</param>
+    /// <param name="j">the column index of the element tied to the event</param>
+    /// <param name="element">the element tied to the event</param>
+    /// <param name="added">flag specifying if the element has been added or removed</param>
+    /// <remarks>Keeps track of the current event with a stack to prevent infinite loops.</remarks>
+    private void OnElementChanged(int i, int j, T element, bool added)
+    {
+        // check if the element in current event is tied to the same element as the previous event 
+        if (_eventStack.TryPeek(out var previous) == false || previous.added != added || (previous.i != i && previous.j != j))
+        {
+            var invokedEvent = added ? _onElementAddedEvent : _onElementRemovedEvent;
+
+            if (invokedEvent != null)
+            {
+                _eventStack.Push((i, j, added));
+                invokedEvent.Invoke(this, new ElementEventArgs(i, j, element));
+                _eventStack.Pop();
+            }
+        }
+    }
+    
+    #endregion
+    
     #region Accessors
     
     /// <summary>
@@ -132,9 +270,11 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     /// <returns>the value of the element</returns>
     /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
     /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
-    public T GetAt(int i, int j)
+    private T GetAt(int i, int j)
     {
-        return Accessor(i, j, element => element);
+        BoundaryCheck(i, j);
+
+        return _elements[i][j];
     }
 
     /// <summary>
@@ -143,16 +283,18 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     /// <param name="i">the row index of the value to set</param>
     /// <param name="j">the column index of the value to set</param>
     /// <param name="value">the new value of the element</param>
-    /// <returns>the current <see cref="Grid2d{T}"/></returns>
     /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
     /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
-    public Grid2d<T> SetAt(int i, int j, T value)
+    private void SetAt(int i, int j, T value)
     {
-        var clampedValue = _clampFunc != null ? _clampFunc(value) : value;
-        
-        Accessor(i, j, _ => _elements[i][j] = clampedValue);
+        BoundaryCheck(i, j);
 
-        return this;
+        var clampedValue = _clampFunc != null ? _clampFunc(value) : value;
+        var element = _elements[i][j];
+
+        _elements[i][j] = clampedValue;
+        OnElementChanged(i, j, element, false);
+        OnElementChanged(i, j, _elements[i][j], true);
     }
 
     /// <summary>
@@ -233,23 +375,7 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
         if (columnCount <= 0)
             throw new ArgumentOutOfRangeException(nameof(columnCount), columnCount, "The number of columns must be greater than 0");
     }
-
-    /// <summary>
-    /// Internal accessor to get or set the value of the element at the specified row and column index.
-    /// </summary>
-    /// <param name="i">the row index of the value to set</param>
-    /// <param name="j">the column index of the value to set</param>
-    /// <param name="accessor">functor used to get or set the value of the element</param>
-    /// <returns>the value of the element</returns>
-    /// <exception cref="ArgumentOutOfRangeException">Row index <paramref name="i"/> is out of bound</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Column index <paramref name="j"/> is out of bound</exception>
-    private T Accessor(int i, int j, Func<T, T> accessor)
-    {
-        BoundaryCheck(i, j);
-
-        return accessor(_elements[i][j]);
-    }
-
+    
     #endregion
     
     #region IEnumerable implementation
@@ -365,7 +491,7 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
             }
         }
     }
-    
+
     #endregion
     
     #region Neighbours
