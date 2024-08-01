@@ -29,11 +29,11 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     /// <summary>
     /// An event invoked when an element is removed from the grid
     /// </summary>
-    private EventHandler<ElementEventArgs>? _onElementRemovedEvent { get; }
+    private EventHandler<ElementEventArgs>? OnElementRemovedHandler { get; }
     /// <summary>
     /// An event invoked when an element is added to the grid
     /// </summary>
-    private EventHandler<ElementEventArgs>? _onElementAddedEvent { get; }
+    private EventHandler<ElementEventArgs>? OnElementAddedHandler { get; }
     /// <summary>
     /// Stack of events raised by the grid.
     /// </summary>
@@ -52,23 +52,35 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
 
     #region Constructor
     
+        /// <summary>
+        /// The <see cref="Grid2d{T}"/> constructor
+        /// </summary>
+        /// <param name="onElementAddedHandler">an event invoked when an element is added to the grid</param>
+        /// <param name="onElementRemovedHandler">an event invoked when an element is removed from the grid</param>
+        /// <param name="clampFunc">the optional functor used to clamp the value of the elements of the <see cref="Grid2d{T}"/></param>
+        public Grid2d(Func<T,T>? clampFunc, 
+                      EventHandler<ElementEventArgs>? onElementAddedHandler,
+                      EventHandler<ElementEventArgs>? onElementRemovedHandler): this()
+        {
+            OnElementRemovedHandler = onElementRemovedHandler;
+            OnElementAddedHandler = onElementAddedHandler;
+            _clampFunc = clampFunc;
+        }
+    
     /// <summary>
     /// The <see cref="Grid2d{T}"/> constructor
     /// </summary>
     /// <param name="rows">the number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
     /// <param name="columns">the number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
-    /// <param name="onElementAddedEvent">an event invoked when an element is added to the grid</param>
-    /// <param name="onElementRemovedEvent">an event invoked when an element is removed from the grid</param>
+    /// <param name="onElementAddedHandler">an event invoked when an element is added to the grid</param>
+    /// <param name="onElementRemovedHandler">an event invoked when an element is removed from the grid</param>
     /// <param name="value">the default value for the elements of the <see cref="Grid2d{T}"/></param>
     /// <param name="clampFunc">the optional functor used to clamp the value of the elements of the <see cref="Grid2d{T}"/></param>
     public Grid2d(int rows, int columns, T value = default!, Func<T,T>? clampFunc = null, 
-                  EventHandler<ElementEventArgs>? onElementAddedEvent = null,
-                  EventHandler<ElementEventArgs>? onElementRemovedEvent = null): this()
+                  EventHandler<ElementEventArgs>? onElementAddedHandler = null,
+                  EventHandler<ElementEventArgs>? onElementRemovedHandler = null)
+        : this(clampFunc, onElementAddedHandler, onElementRemovedHandler)
     {
-        _onElementRemovedEvent = onElementRemovedEvent;
-        _onElementAddedEvent = onElementAddedEvent;
-        _clampFunc = clampFunc;
-
         Resize(rows, columns, value);
     }
 
@@ -234,7 +246,7 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
         // check if the element in current event is tied to the same element as the previous event 
         if (_eventStack.TryPeek(out var previous) == false || previous.added != added || (previous.i != i && previous.j != j))
         {
-            var invokedEvent = added ? _onElementAddedEvent : _onElementRemovedEvent;
+            var invokedEvent = added ? OnElementAddedHandler : OnElementRemovedHandler;
 
             if (invokedEvent != null)
             {

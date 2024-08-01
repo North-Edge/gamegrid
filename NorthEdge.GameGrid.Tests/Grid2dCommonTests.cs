@@ -173,7 +173,7 @@ public class Grid2dCommonTests
     [Test]
     public void TestAIndexersWithInvalidCoordinates()
     {
-        var grid = new Grid2d<int>(1, 1);
+        var grid = new Grid2d<int>();
         Assert.Multiple(() =>
         {
             // the indexer should throw an exception when trying to pass an out-of-bound value for the row index
