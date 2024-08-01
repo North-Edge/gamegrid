@@ -150,7 +150,7 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
             {
                 // if shrinking rows, delete the elements starting at 0, up to the old column count 
                 // if shrinking columns, delete the elements from the new row count to the old count   
-                if ((rowDiff > 0 && i >= oldRow) || (colDiff > 0 && j >= columnCount))
+                if ((rowDiff > 0 && i >= rowCount) || (colDiff > 0 && j >= columnCount))
                 {
                     var element = _elements[i][j];
                     // remove the element from the list

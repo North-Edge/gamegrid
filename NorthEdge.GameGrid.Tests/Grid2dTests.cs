@@ -331,19 +331,38 @@ public class Grid2dTests<T>
             Assert.That(onElementAddedCount, Is.EqualTo(count));
             Assert.That(onElementRemovedCount, Is.EqualTo(count));
         });
-        // resize the grid
-        onElementAddedCount = onElementRemovedCount = 0;
-        var count2 = grid.Resize(10, 10).Count();
         // keep a list of all the elements of the grid for later
         var elements = grid.ToList();
         // assert that all the elements have been set to 5 using the event handler
         Assert.That(elements.All(e => e != null && e.Equals(functor.Value(5))));
+        // expand the grid
+        onElementAddedCount = onElementRemovedCount = 0;
+        var count2 = grid.Resize(10, 10).Count();
         Assert.Multiple(() =>
         {
             // check that the callbacks have been called for each new element because of the affectation
             Assert.That(onElementAddedCount, Is.EqualTo(count2 - count));
             Assert.That(onElementRemovedCount, Is.EqualTo(count2 - count));
         });
+        // keep a list of all the elements of the grid for later
+        elements = grid.ToList();
+        // assert that all the elements have been set to 5 using the event handler
+        Assert.That(elements.All(e => e != null && e.Equals(functor.Value(5))));
+        // shrink the grid
+        onElementAddedCount = onElementRemovedCount = 0;
+        var count3 = grid.Resize(5, 5).Count();
+        // check that the old elements of the list that are disposable have been disposed by the event handler
+        Assert.That(elements.All(element => grid.Contains(element)
+                                         || element is not TestValue testValue
+                                         || testValue is { IsDisposed: true, DisposeCalls: 1 }));
+        Assert.Multiple(() =>
+        {
+            // check that the remove callbacks has been called for each removed element 
+            Assert.That(onElementAddedCount, Is.EqualTo(0));
+            Assert.That(onElementRemovedCount, Is.EqualTo(count2 - count3));
+        });
+        // keep a list of all the elements of the grid for later
+        elements = grid.ToList();
         // empty the list
         onElementAddedCount = onElementRemovedCount = 0;
         grid.Clear();
@@ -351,7 +370,7 @@ public class Grid2dTests<T>
         {
             // check that the removed callbacks have been called for each element
             Assert.That(onElementAddedCount, Is.EqualTo(0));
-            Assert.That(onElementRemovedCount, Is.EqualTo(count2));
+            Assert.That(onElementRemovedCount, Is.EqualTo(count3));
         });
         // check that the old elements of the list that are disposable have been disposed by the event handler
         Assert.That(elements.All(element => element is not TestValue testValue
