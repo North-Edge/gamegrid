@@ -163,7 +163,10 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
                 else if (rowDiff < 0 && i >= oldRow || (colDiff < 0 && j >= oldCol))
                 {
                     var element = value ?? CreateElement(value);
-                    var col = colStart - j - 1;
+                    // adjust the index at which the new item will be inserted
+                    var col = i < oldRow 
+                            ?  colStart - j - 1 - rowDiff
+                            :  colStart - j - 1;
                     // insert a new element in the list
                     _elements[i].Add(_clampFunc != null ? _clampFunc(element) : element);
                     // trigger an event to notify that the element was added

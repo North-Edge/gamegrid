@@ -266,40 +266,92 @@ public class Grid2dTests<T>
     }
 
     /// <summary>
-    /// Tests the comparison operators of the <see cref="Grid2d{T}"/>
+    /// Tests the events when elements are added or removed from the <see cref="Grid2d{T}"/>
     /// </summary>
     /// <param name="functor">the datapoint for the current theory</param>
     [Theory]
     public void TestElementEvents(TestFunctors<T> functor)
     {
+        var onElementRemovedCount = 0;
+        var onElementAddedCount = 0;
+        // create a new grid filled with 0
+        var grid = new Grid2d<T>(null, (_, _) => ++onElementAddedCount,
+                                       (_, _) => ++onElementRemovedCount);
+        // resize the grid then empty it
+        var count = grid.Resize(5, 5).Count();
+        // keep a list of all the elements of the grid for later
+        var elements = grid.ToList();
+        // empty the list
+        grid.Clear();
+        // check that the grid dimensions are now 0
+        Assert.That(grid.Columns, Is.EqualTo(0));
+        Assert.That(grid.Rows, Is.EqualTo(0));
+        // check that the callbacks have been called for each element
+        Assert.That(onElementAddedCount, Is.EqualTo(count));
+        Assert.That(onElementRemovedCount, Is.EqualTo(count));
+        // check that the old elements of the list that are disposable have been disposed by the event handler
+        Assert.That(elements.All(element => element is not TestValue testValue
+                                         || testValue is { IsDisposed: true, DisposeCalls: 1 }));
+    }
+
+    /// <summary>
+    /// Tests the comparison operators of the <see cref="Grid2d{T}"/>
+    /// </summary>
+    /// <param name="functor">the datapoint for the current theory</param>
+    [Theory]
+    public void TestElementEventsRecursion(TestFunctors<T> functor)
+    {
+        var onElementRemovedCount = 0;
+        var onElementAddedCount = 0;
         // create a new grid filled with 0
         var grid = new Grid2d<T>(5, 5, functor.Value(0), null, 
-        (g, args) => {
-            var grid = g as Grid2d<T>;
-
-            if (grid != null)
+        (obj, args) => {
+            var g = obj as Grid2d<T>;
+            // ReSharper disable once AccessToModifiedClosure
+            ++onElementAddedCount;
+            
+            if (g != null)
             {
                 // check that replacing the element in the element added event doesn't trigger an infinite loop
-                grid[args.i, args.j] = functor.Value(5);
+                g[args.i, args.j] = functor.Value(5);
             }
         }, 
         (_, args) => {
+            // ReSharper disable once AccessToModifiedClosure
+            ++onElementRemovedCount;
             // dispose the object if it is disposable
             if (args.element is IDisposable disposable) {
                 disposable.Dispose();
             }
         });
+        var count = grid.Count();
+        Assert.Multiple(() =>
+        {
+            // check that the both callbacks have been called for each element because of the affectation
+            Assert.That(onElementAddedCount, Is.EqualTo(count));
+            Assert.That(onElementRemovedCount, Is.EqualTo(count));
+        });
+        // resize the grid
+        onElementAddedCount = onElementRemovedCount = 0;
+        var count2 = grid.Resize(10, 10).Count();
         // keep a list of all the elements of the grid for later
         var elements = grid.ToList();
         // assert that all the elements have been set to 5 using the event handler
         Assert.That(elements.All(e => e != null && e.Equals(functor.Value(5))));
-        // empty the list and check that it has now 0 element
-        Assert.That(grid.Clear().Count, Is.EqualTo(0));
         Assert.Multiple(() =>
         {
-            // check that the grid dimensions are now 0
-            Assert.That(grid.Columns, Is.EqualTo(0));
-            Assert.That(grid.Rows, Is.EqualTo(0));
+            // check that the callbacks have been called for each new element because of the affectation
+            Assert.That(onElementAddedCount, Is.EqualTo(count2 - count));
+            Assert.That(onElementRemovedCount, Is.EqualTo(count2 - count));
+        });
+        // empty the list
+        onElementAddedCount = onElementRemovedCount = 0;
+        grid.Clear();
+        Assert.Multiple(() =>
+        {
+            // check that the removed callbacks have been called for each element
+            Assert.That(onElementAddedCount, Is.EqualTo(0));
+            Assert.That(onElementRemovedCount, Is.EqualTo(count2));
         });
         // check that the old elements of the list that are disposable have been disposed by the event handler
         Assert.That(elements.All(element => element is not TestValue testValue
