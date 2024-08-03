@@ -146,6 +146,12 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
 
         for (var i = rowStart; --i >= 0;)
         {
+            if (colDiff < 0 && i < oldRow)
+            {
+                // increase the capacity of existing rows when adding columns
+                _elements[i].Capacity = columnCount;
+            }
+
             for (var j = colStart; --j >= 0;)
             {
                 // if shrinking rows, delete the elements starting at 0, up to the old column count 
