@@ -502,7 +502,7 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     /// Internal iterator on all the elements of the <see cref="Grid2d{T}"/> as a struct containing (row, column, value) 
     /// </summary>
     /// <returns>enumerable of the structs containing (row, column, value)</returns>
-    private IEnumerable<(int i, int j, T element)> Iterate()
+    public IEnumerable<(int i, int j, T element)> Iterate()
     {
         for(var i = 0; i < _elements.Count; ++i)
         {
