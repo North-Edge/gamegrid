@@ -281,17 +281,24 @@ public class Grid2dTests<T>
         var count = grid.Resize(5, 5).Count();
         // keep a list of all the elements of the grid for later
         var elements = grid.ToList();
-        // empty the list
-        grid.Clear();
-        // check that the grid dimensions are now 0
-        Assert.That(grid.Columns, Is.EqualTo(0));
-        Assert.That(grid.Rows, Is.EqualTo(0));
-        // check that the callbacks have been called for each element
-        Assert.That(onElementAddedCount, Is.EqualTo(count));
-        Assert.That(onElementRemovedCount, Is.EqualTo(count));
-        // check that the old elements of the list that are disposable have been disposed by the event handler
-        Assert.That(elements.All(element => element is not TestValue testValue
-                                         || testValue is { IsDisposed: true, DisposeCalls: 1 }));
+        Assert.Multiple(() =>
+        {
+            // empty the list and check that the number of elements is 0
+            Assert.That(grid.Clear().Count(), Is.EqualTo(0));
+            // check that the grid dimensions are now 0
+            Assert.That(grid.Columns, Is.EqualTo(0));
+            Assert.That(grid.Rows, Is.EqualTo(0));
+        });
+
+        Assert.Multiple(() =>
+        {
+            // check that the callbacks have been called for each element
+            Assert.That(onElementAddedCount, Is.EqualTo(count));
+            Assert.That(onElementRemovedCount, Is.EqualTo(count));
+            // check that the old elements of the list that are disposable have been disposed by the event handler
+            Assert.That(elements.All(element => element is not TestValue testValue
+                                             || testValue is { IsDisposed: true, DisposeCalls: 1 }));
+        });
     }
 
     /// <summary>

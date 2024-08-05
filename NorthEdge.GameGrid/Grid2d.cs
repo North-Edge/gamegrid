@@ -52,20 +52,30 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
 
     #region Constructor
     
-        /// <summary>
-        /// The <see cref="Grid2d{T}"/> constructor
-        /// </summary>
-        /// <param name="onElementAddedHandler">an event invoked when an element is added to the grid</param>
-        /// <param name="onElementRemovedHandler">an event invoked when an element is removed from the grid</param>
-        /// <param name="clampFunc">the optional functor used to clamp the value of the elements of the <see cref="Grid2d{T}"/></param>
-        public Grid2d(Func<T,T>? clampFunc, 
-                      EventHandler<ElementEventArgs>? onElementAddedHandler,
-                      EventHandler<ElementEventArgs>? onElementRemovedHandler): this()
-        {
-            OnElementRemovedHandler = onElementRemovedHandler;
-            OnElementAddedHandler = onElementAddedHandler;
-            _clampFunc = clampFunc;
-        }
+    /// <summary>
+    /// The <see cref="Grid2d{T}"/> constructor
+    /// </summary>
+    /// <param name="onElementAddedHandler">an event invoked when an element is added to the grid</param>
+    /// <param name="onElementRemovedHandler">an event invoked when an element is removed from the grid</param>
+    /// <param name="clampFunc">the optional functor used to clamp the value of the elements of the <see cref="Grid2d{T}"/></param>
+    public Grid2d(Func<T,T>? clampFunc, 
+                  EventHandler<ElementEventArgs>? onElementAddedHandler,
+                  EventHandler<ElementEventArgs>? onElementRemovedHandler): this()
+    {
+        OnElementRemovedHandler = onElementRemovedHandler;
+        OnElementAddedHandler = onElementAddedHandler;
+        _clampFunc = clampFunc;
+    }
+    
+    /// <summary>
+    /// The <see cref="Grid2d{T}"/> constructor
+    /// </summary>
+    /// <param name="rows">the number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="columns">the number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    public Grid2d(int rows, int columns): this()
+    {
+        Resize(rows, columns, CreateElement);
+    }
     
     /// <summary>
     /// The <see cref="Grid2d{T}"/> constructor
@@ -81,7 +91,24 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
                   EventHandler<ElementEventArgs>? onElementRemovedHandler = null)
         : this(clampFunc, onElementAddedHandler, onElementRemovedHandler)
     {
-        Resize(rows, columns, value);
+        Resize(rows, columns, () => value);
+    }
+    
+    /// <summary>
+    /// The <see cref="Grid2d{T}"/> constructor
+    /// </summary>
+    /// <param name="rows">the number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="columns">the number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
+    /// <param name="onElementAddedHandler">an event invoked when an element is added to the grid</param>
+    /// <param name="onElementRemovedHandler">an event invoked when an element is removed from the grid</param>
+    /// <param name="newFunc">the default value for the elements of the <see cref="Grid2d{T}"/></param>
+    /// <param name="clampFunc">the optional functor used to clamp the value of the elements of the <see cref="Grid2d{T}"/></param>
+    public Grid2d(int rows, int columns, Func<T>? newFunc = null, Func<T,T>? clampFunc = null, 
+        EventHandler<ElementEventArgs>? onElementAddedHandler = null,
+        EventHandler<ElementEventArgs>? onElementRemovedHandler = null)
+        : this(clampFunc, onElementAddedHandler, onElementRemovedHandler)
+    {
+        Resize(rows, columns, newFunc ?? CreateElement);
     }
 
     /// <summary>
@@ -89,15 +116,15 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     /// </summary>
     /// <param name="rowCount">the new number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
     /// <param name="columnCount">the new number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
-    /// <param name="value">the default value for the elements of the <see cref="Grid2d{T}"/></param>
+    /// <param name="newFunc">a functor that creates an instance of <typeparamref name="T"/></param>
     /// <returns>the current <see cref="Grid2d{T}"/></returns>
     /// <exception cref="ArgumentOutOfRangeException">"The number of rows must be greater than 0"</exception>
     /// <exception cref="ArgumentOutOfRangeException">The number of columns must be greater than 0</exception> 
-    public Grid2d<T> Resize(int rowCount, int columnCount, T value = default!)
+    public Grid2d<T> Resize(int rowCount, int columnCount, Func<T>? newFunc = null)
     {
         SizeCheck(rowCount, columnCount);
 
-        return InternalResize(rowCount, columnCount, value);
+        return InternalResize(rowCount, columnCount, newFunc);
     }
 
     /// <summary>
@@ -114,11 +141,11 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     /// </summary>
     /// <param name="rowCount">the new number of rows in the <see cref="Grid2d{T}"/> (must be > 1)</param>
     /// <param name="columnCount">the new number of columns in the <see cref="Grid2d{T}"/> (must be > 1)</param>
-    /// <param name="value">the default value for the elements of the <see cref="Grid2d{T}"/></param>
+    /// <param name="newFunc">a functor that creates an instance of <typeparamref name="T"/></param>
     /// <returns>the current <see cref="Grid2d{T}"/></returns>
     /// <exception cref="ArgumentOutOfRangeException">"The number of rows must be greater than 0"</exception>
     /// <exception cref="ArgumentOutOfRangeException">The number of columns must be greater than 0</exception> 
-    private Grid2d<T> InternalResize(int rowCount, int columnCount, T value = default!)
+    private Grid2d<T> InternalResize(int rowCount, int columnCount, Func<T>? newFunc = null)
     {
         if (rowCount == Rows && columnCount == Columns)
             return this;
@@ -168,7 +195,7 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
                 // if growing columns, create new elements from the old size to the new one
                 else if (rowDiff < 0 && i >= oldRow || (colDiff < 0 && j >= oldCol))
                 {
-                    var element = value ?? CreateElement(value);
+                    var element = newFunc != null ? newFunc() : CreateElement();
                     // adjust the index at which the new item will be inserted
                     var col = i < oldRow 
                             ?  colStart - j - 1 - rowDiff
@@ -190,14 +217,13 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
     }
 
     /// <summary>
-    /// Creates a new element of type T
+    /// Creates a new element of type T if a parameterless constructor exists or default
     /// </summary>
-    /// <param name="defaultValue">a default value in case the type doesn't have a parameterless constructor</param>
-    /// <returns>a new element of type T</returns>
-    private static T CreateElement(T defaultValue)
+    /// <returns>a new element of type T or default</returns>
+    private static T CreateElement()
     {
         return typeof(T).GetConstructor(Type.EmptyTypes) == null 
-             ? defaultValue : Activator.CreateInstance<T>();
+             ? default! : Activator.CreateInstance<T>();
     }
 
     #endregion
@@ -347,7 +373,7 @@ public class Grid2d<T>(): IEnumerable<T>, IEquatable<Grid2d<T>>
         SizeCheck(rowCount, columnCount);
         BoundaryCheck(i, j);
         // clamp the size of the sub-grid within the boundaries of the current grid
-        var subGrid = new Grid2d<T>(Math.Min(rowCount, Rows - i), Math.Min(columnCount, Columns - j));
+        var subGrid = new Grid2d<T>(Math.Min(rowCount, Rows - i), Math.Min(columnCount, Columns - j), CreateElement);
         // select only the elements within the boundaries of the subgrid
         foreach (var indexes in Iterate().Where(t => t.i >= i && t.i < i + rowCount && t.j >= j && t.j < j + columnCount))
         {
