@@ -6,6 +6,12 @@
         <Nullable>enable</Nullable>
         <AssemblyName>NorthEdge.GameGrid</AssemblyName>
         <RootNamespace>NorthEdge.GameGrid</RootNamespace>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>Generic game grid</Title>
+        <Authors>NorthEdge</Authors>
+        <Description>A generic game grid</Description>
+        <PackageProjectUrl>https://github.com/North-Edge/gamegrid</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/North-Edge/gamegrid</RepositoryUrl>
     </PropertyGroup>
 
 </Project>
